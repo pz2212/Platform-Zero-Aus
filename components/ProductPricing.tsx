@@ -9,7 +9,7 @@ import {
   MoreVertical, ShoppingBag, 
   Share2, PackagePlus, CheckCircle, Plus, Camera, Loader2, ChevronRight,
   Box, Hash, Printer, QrCode, Sparkles, ChevronDown, Pencil, ShoppingCart,
-  Search, HandCoins
+  Search, HandCoins, ImagePlus, Leaf
 } from 'lucide-react';
 
 interface ProductPricingProps {
@@ -17,6 +17,125 @@ interface ProductPricingProps {
 }
 
 const UNITS: ProductUnit[] = ['KG', 'Tray', 'Bin', 'Tonne', 'loose'];
+
+const AddProductModal = ({ isOpen, onClose, onComplete }: { 
+    isOpen: boolean, 
+    onClose: () => void, 
+    onComplete: () => void 
+}) => {
+    const [image, setImage] = useState<string | null>(null);
+    const [name, setName] = useState('');
+    const [variety, setVariety] = useState('');
+    const [category, setCategory] = useState<'Vegetable' | 'Fruit'>('Vegetable');
+    const [price, setPrice] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    if (!isOpen) return null;
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (ev) => setImage(ev.target?.result as string);
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        
+        const newProd: Product = {
+            id: `p-man-${Date.now()}`,
+            name,
+            variety: variety || 'Standard',
+            category,
+            imageUrl: image || 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&q=80&w=400&h=400',
+            defaultPricePerKg: parseFloat(price),
+            co2SavingsPerKg: 0.8
+        };
+
+        mockService.addProduct(newProd);
+
+        setTimeout(() => {
+            setIsSaving(false);
+            onComplete();
+            onClose();
+            setName('');
+            setVariety('');
+            setPrice('');
+            setImage(null);
+        }, 800);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+                <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <div>
+                        <h2 className="text-2xl font-black text-[#0F172A] tracking-tight uppercase">Add New Product</h2>
+                        <p className="text-[10px] text-emerald-500 font-black uppercase tracking-[0.2em] mt-1">Marketplace Catalog Creation</p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-300 hover:text-gray-900 transition-colors p-2 bg-white rounded-full border border-gray-100 shadow-sm">
+                        <X size={24} strokeWidth={2.5} />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-10 space-y-8">
+                    <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`h-48 border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden bg-white shadow-inner-sm ${image ? 'border-emerald-300 shadow-none' : 'border-gray-100 hover:border-indigo-300 hover:bg-gray-50/50'}`}
+                    >
+                        {image ? (
+                            <img src={image} className="w-full h-full object-cover" alt="Preview"/>
+                        ) : (
+                            <div className="text-center">
+                                <div className="bg-indigo-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-600 shadow-sm">
+                                    <ImagePlus size={32} strokeWidth={2.5}/>
+                                </div>
+                                <h3 className="text-lg font-black text-gray-900 mb-1">Upload Catalog Image</h3>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Hi-Res JPEG or PNG</p>
+                            </div>
+                        )}
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange}/>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Produce Name</label>
+                            <input required className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl font-bold text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/5 transition-all" placeholder="e.g. Organic Roma Tomatoes" value={name} onChange={e => setName(e.target.value)}/>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Variety</label>
+                            <input required className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl font-bold text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/5 transition-all" placeholder="e.g. Roma" value={variety} onChange={e => setVariety(e.target.value)}/>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Category</label>
+                            <select className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl font-bold text-gray-900 outline-none focus:bg-white transition-all appearance-none" value={category} onChange={e => setCategory(e.target.value as any)}>
+                                <option value="Vegetable">Vegetable</option>
+                                <option value="Fruit">Fruit</option>
+                            </select>
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Default Market Price ($/kg)</label>
+                            <div className="relative">
+                                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={20}/>
+                                <input required type="number" step="0.01" className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl font-black text-2xl text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/5 transition-all" placeholder="0.00" value={price} onChange={e => setPrice(e.target.value)}/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button 
+                        disabled={isSaving || !name || !price}
+                        className="w-full py-5 bg-[#043003] hover:bg-black text-white rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 active:scale-95"
+                    >
+                        {isSaving ? <Loader2 className="animate-spin" size={24}/> : <><Sparkles size={20}/> Add to Global Catalog</>}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
 
 const EditPricingModal = ({ isOpen, onClose, product, onComplete }: { 
     isOpen: boolean, 
@@ -158,7 +277,6 @@ const AddInventoryModal = ({ isOpen, onClose, user, products, onComplete, initia
             return;
         }
 
-        // Fix: Changed setIsSubmitting to setSubmitting to match state definition
         setSubmitting(true);
         const lotId = mockService.generateLotId();
         
@@ -202,7 +320,6 @@ const AddInventoryModal = ({ isOpen, onClose, user, products, onComplete, initia
         mockService.updateProductPrice(targetProductId, parseFloat(price));
 
         setTimeout(() => {
-            // Fix: Changed setIsSubmitting to setSubmitting to match state definition
             setSubmitting(false);
             setNewLotId(lotId);
             onComplete();
@@ -408,6 +525,7 @@ export const ProductPricing: React.FC<ProductPricingProps> = ({ user }) => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [selectedProductForInventory, setSelectedProductForInventory] = useState<string | undefined>(undefined);
   const [isInventoryModalOpen, setIsInventoryModalOpen] = useState(false);
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const [activeActionMenu, setActiveActionMenu] = useState<string | null>(null);
   
   // Instant Sale Logic
@@ -461,15 +579,21 @@ export const ProductPricing: React.FC<ProductPricingProps> = ({ user }) => {
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-4 md:mb-10">
         <div>
-            <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight uppercase leading-none">Inventory & Pricing</h1>
+            <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight uppercase leading-none">Catalog Manager</h1>
             <p className="text-gray-400 font-bold text-xs md:text-sm mt-1">Global catalog manager for {user.businessName}.</p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <button 
+                onClick={() => setIsAddProductModalOpen(true)}
+                className="flex-1 md:flex-none px-6 py-3 md:py-4 bg-white border-2 border-indigo-600 text-indigo-600 rounded-[1.25rem] font-black text-[10px] md:text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm hover:bg-indigo-50 transition-all active:scale-95"
+            >
+                <Plus size={18}/> New Catalog Variety
+            </button>
             <button 
                 onClick={handleLogNewStock}
                 className="flex-1 md:flex-none px-6 py-3 md:py-4 bg-[#043003] text-white rounded-[1.25rem] font-black text-[10px] md:text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-emerald-100 hover:bg-black transition-all active:scale-95"
             >
-                <Plus size={18}/> Log Fresh Stock
+                <PackagePlus size={18}/> Log Fresh Stock
             </button>
         </div>
       </div>
@@ -481,8 +605,8 @@ export const ProductPricing: React.FC<ProductPricingProps> = ({ user }) => {
                     <ShoppingBag size={24}/>
                 </div>
                 <div className="bg-gray-100 p-1 rounded-xl flex border border-gray-200">
-                    <button onClick={() => setActiveTab('catalog')} className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'catalog' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Catalog List</button>
-                    <button onClick={() => setActiveTab('rules')} className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'rules' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}><Zap size={12}/> Rules</button>
+                    <button onClick={() => setActiveTab('catalog')} className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'catalog' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Global List</button>
+                    <button onClick={() => setActiveTab('rules')} className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'rules' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}><Zap size={12}/> Yield Rules</button>
                 </div>
             </div>
             <div className="relative w-full md:w-96 group">
@@ -518,7 +642,6 @@ export const ProductPricing: React.FC<ProductPricingProps> = ({ user }) => {
                                     {hasActiveMenu ? <X size={20} strokeWidth={2.5}/> : <MoreVertical size={20} strokeWidth={2.5}/>}
                                 </button>
                                 
-                                {/* PREMIUM ACTION MENU OVERLAY - OPTIMIZED FOR MOBILE */}
                                 {hasActiveMenu && (
                                     <div ref={menuRef} className="absolute right-0 top-14 w-52 md:w-56 bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 z-50 animate-in zoom-in-95 slide-in-from-top-2 duration-150 py-2.5 overflow-hidden">
                                         <button 
@@ -551,10 +674,16 @@ export const ProductPricing: React.FC<ProductPricingProps> = ({ user }) => {
 
                         <div className="p-6 md:p-8 flex-1 flex flex-col justify-between">
                             <div className="mb-6">
-                                <h3 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase mb-2">{product.name}</h3>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <h3 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">{product.name}</h3>
+                                    <div className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center gap-1">
+                                        <Leaf size={10}/>
+                                        <span className="text-[7px] font-black uppercase">Market-Ready</span>
+                                    </div>
+                                </div>
                                 <div className="flex justify-between items-end">
                                     <div className="space-y-1">
-                                        <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Current Rate</p>
+                                        <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Global Rate</p>
                                         <div className="flex items-baseline gap-1">
                                             <span className="text-2xl font-black text-emerald-600 tracking-tighter">${product.defaultPricePerKg.toFixed(2)}</span>
                                             <span className="text-[10px] font-black text-gray-400 uppercase">/{product.unit || 'kg'}</span>
@@ -572,13 +701,13 @@ export const ProductPricing: React.FC<ProductPricingProps> = ({ user }) => {
                             <div className="flex gap-2">
                                 <button 
                                     onClick={() => setSaleProduct(product)}
-                                    className="flex-[2] py-4 bg-[#043003] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-2 active:scale-95 group-hover:border-indigo-200"
+                                    className="flex-[2] py-4 bg-[#043003] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-2 active:scale-95"
                                 >
                                     <HandCoins size={16}/> SELL
                                 </button>
                                 <button 
                                     onClick={() => handleProductAddStock(product.id)}
-                                    className="flex-1 py-4 bg-gray-50 border border-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all flex items-center justify-center gap-2 group-hover:border-indigo-200"
+                                    className="flex-1 py-4 bg-gray-50 border border-gray-100 text-gray-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all flex items-center justify-center gap-2 active:scale-95"
                                 >
                                     <Plus size={16}/> LOG BATCH
                                 </button>
@@ -594,6 +723,12 @@ export const ProductPricing: React.FC<ProductPricingProps> = ({ user }) => {
         isOpen={!!editingProduct} 
         onClose={() => setEditingProduct(null)} 
         product={editingProduct} 
+        onComplete={loadData}
+      />
+
+      <AddProductModal 
+        isOpen={isAddProductModalOpen}
+        onClose={() => setIsAddProductModalOpen(false)}
         onComplete={loadData}
       />
 

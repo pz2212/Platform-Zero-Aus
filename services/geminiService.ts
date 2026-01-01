@@ -17,6 +17,45 @@ export interface SeasonalProduct {
     co2Savings: number;
 }
 
+export const generateEnvironmentalImpact = async (name: string, variety: string): Promise<{co2: number, water: number, waste: number}> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: `Generate estimated environmental impact metrics for 1kg of "${name}" (Variety: ${variety}) if it were saved from landfill through a direct marketplace.
+            
+            Return ONLY a JSON object with:
+            - "co2": (number) kg of CO2 emissions avoided by direct supply chain bypass.
+            - "water": (number) Liters of freshwater saved/preserved by avoiding waste.
+            - "waste": (number) kg of produce diverted (usually 1.0 for 1kg product).
+            
+            Base these on scientific agricultural averages for the specific produce type.`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        co2: { type: Type.NUMBER },
+                        water: { type: Type.NUMBER },
+                        waste: { type: Type.NUMBER }
+                    },
+                    required: ["co2", "water", "waste"]
+                }
+            }
+        });
+
+        const result = response.text;
+        if (result) {
+            return JSON.parse(result);
+        }
+        return { co2: 0.8, water: 50, waste: 1.0 };
+    } catch (error) {
+        console.error("Gemini Impact Generation Error:", error);
+        return { co2: 0.8, water: 50, waste: 1.0 };
+    }
+};
+
 export const parseNaturalLanguageOrder = async (text: string, catalog: Product[]): Promise<ParsedOrderItem[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     

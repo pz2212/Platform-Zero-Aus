@@ -94,6 +94,8 @@ export interface Product {
   defaultPricePerKg: number;
   unit?: ProductUnit;
   co2SavingsPerKg?: number;
+  waterSavingsPerKg?: number;
+  wasteDivertedPerKg?: number;
 }
 
 export interface ParsedOrderItem {

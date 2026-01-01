@@ -1,11 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
-import { User, Product, OrderItem, ProductUnit } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, Product, OrderItem, ProductUnit, UserRole } from '../types';
 import { mockService } from '../services/mockDataService';
+import { generateEnvironmentalImpact } from '../services/geminiService';
 import { 
   ShoppingCart, Search, Plus, X, Leaf, Minus, 
   ArrowRight, ShoppingBag, Trash2, Truck, Calendar, Clock, 
-  User as UserIcon, DollarSign, Check, CheckCircle, ChevronDown, Package
+  User as UserIcon, DollarSign, Check, CheckCircle, ChevronDown, Package,
+  Sparkles, Loader2, ImagePlus, Wind, Droplets, Recycle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -21,6 +23,143 @@ interface CartItem {
     imageUrl: string;
     unit: string;
 }
+
+const AddProductModal = ({ isOpen, onClose, onComplete }: { 
+    isOpen: boolean, 
+    onClose: () => void, 
+    onComplete: () => void 
+}) => {
+    const [image, setImage] = useState<string | null>(null);
+    const [name, setName] = useState('');
+    const [variety, setVariety] = useState('');
+    const [category, setCategory] = useState<'Vegetable' | 'Fruit'>('Vegetable');
+    const [isSaving, setIsSaving] = useState(false);
+    const [impactLoading, setImpactLoading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    if (!isOpen) return null;
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (ev) => setImage(ev.target?.result as string);
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        setImpactLoading(true);
+        
+        // Generate Environmental Impact via AI
+        const impact = await generateEnvironmentalImpact(name, variety || 'Standard');
+        
+        const newProd: Product = {
+            id: `p-man-${Date.now()}`,
+            name,
+            variety: variety || 'Standard',
+            category,
+            imageUrl: image || 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&q=80&w=400&h=400',
+            defaultPricePerKg: 2.50, // Default fallback price as requested removed from input
+            co2SavingsPerKg: impact.co2,
+            waterSavingsPerKg: impact.water,
+            wasteDivertedPerKg: impact.waste
+        };
+
+        mockService.addProduct(newProd);
+
+        setTimeout(() => {
+            setImpactLoading(false);
+            setIsSaving(false);
+            onComplete();
+            onClose();
+            setName('');
+            setVariety('');
+            setImage(null);
+        }, 800);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+                <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <div>
+                        <h2 className="text-2xl font-black text-[#0F172A] tracking-tight uppercase">Add New Product</h2>
+                        <p className="text-[10px] text-emerald-500 font-black uppercase tracking-[0.2em] mt-1">Direct Market Catalog Creation</p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-300 hover:text-gray-900 transition-colors p-2 bg-white rounded-full border border-gray-100 shadow-sm">
+                        <X size={24} strokeWidth={2.5} />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-10 space-y-8">
+                    <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`h-48 border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden bg-white shadow-inner-sm ${image ? 'border-emerald-300 shadow-none' : 'border-gray-100 hover:border-indigo-300 hover:bg-gray-50/50'}`}
+                    >
+                        {image ? (
+                            <img src={image} className="w-full h-full object-cover" alt="Preview"/>
+                        ) : (
+                            <div className="text-center">
+                                <div className="bg-indigo-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-600 shadow-sm">
+                                    <ImagePlus size={32} strokeWidth={2.5}/>
+                                </div>
+                                <h3 className="text-lg font-black text-gray-900 mb-1">Upload Catalog Image</h3>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Hi-Res JPEG or PNG</p>
+                            </div>
+                        )}
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange}/>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Produce Name</label>
+                            <input required className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl font-bold text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/5 transition-all" placeholder="e.g. Heirloom Carrots" value={name} onChange={e => setName(e.target.value)}/>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Variety</label>
+                            <input required className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl font-bold text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/5 transition-all" placeholder="e.g. Nantes" value={variety} onChange={e => setVariety(e.target.value)}/>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Category</label>
+                            <select className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl font-bold text-gray-900 outline-none focus:bg-white transition-all appearance-none" value={category} onChange={e => setCategory(e.target.value as any)}>
+                                <option value="Vegetable">Vegetable</option>
+                                <option value="Fruit">Fruit</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="bg-emerald-50/50 p-6 rounded-3xl border border-emerald-100/50 flex items-start gap-4">
+                        <div className="p-3 bg-white rounded-2xl text-emerald-600 shadow-sm shrink-0">
+                            <Wind size={24}/>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-black text-emerald-900 uppercase tracking-tight">AI Impact Calculation</p>
+                            <p className="text-[11px] text-emerald-700 font-medium leading-relaxed mt-1">
+                                Platform Zero AI will automatically calculate specific CO2, Water, and Waste diversion metrics for this variety upon creation.
+                            </p>
+                        </div>
+                    </div>
+
+                    <button 
+                        disabled={isSaving || !name}
+                        className="w-full py-5 bg-[#043003] hover:bg-black text-white rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 active:scale-95 overflow-hidden"
+                    >
+                        {isSaving ? (
+                            <div className="flex items-center gap-3">
+                                <Loader2 className="animate-spin" size={24}/>
+                                {impactLoading ? "Analyzing Impact..." : "Finalizing Catalog Entry..."}
+                            </div>
+                        ) : (
+                            <><Sparkles size={20}/> Add to Global Catalog</>
+                        )}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
 
 const CheckoutModal = ({ isOpen, onClose, cart, products, onPlaceOrder }: { 
     isOpen: boolean, 
@@ -58,8 +197,7 @@ const CheckoutModal = ({ isOpen, onClose, cart, products, onPlaceOrder }: {
     return (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col md:flex-row max-h-[90vh] animate-in zoom-in-95">
-                {/* Left Pane - Order Summary */}
-                <div className="w-full md:w-[360px] bg-[#F8FAFC] border-r border-gray-100 p-10 flex flex-col">
+                <div className="w-full md:w-[320px] bg-[#F8FAFC] border-r border-gray-100 p-10 flex flex-col">
                     <div className="flex items-center gap-3 mb-10">
                         <ShoppingCart size={24} className="text-gray-900" />
                         <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Order Summary</h2>
@@ -97,7 +235,6 @@ const CheckoutModal = ({ isOpen, onClose, cart, products, onPlaceOrder }: {
                     </div>
                 </div>
 
-                {/* Right Pane - Checkout Details */}
                 <div className="flex-1 bg-white p-10 flex flex-col overflow-y-auto">
                     <div className="flex justify-between items-start mb-12">
                         <div>
@@ -110,7 +247,6 @@ const CheckoutModal = ({ isOpen, onClose, cart, products, onPlaceOrder }: {
                     </div>
 
                     <div className="space-y-10 flex-1">
-                        {/* Delivery Section */}
                         <div className="space-y-6">
                             <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                 <Truck size={14}/> DELIVERY INFORMATION
@@ -155,7 +291,6 @@ const CheckoutModal = ({ isOpen, onClose, cart, products, onPlaceOrder }: {
                             </div>
                         </div>
 
-                        {/* Payment Section */}
                         <div className="space-y-6">
                             <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                 <DollarSign size={14}/> PAYMENT METHOD
@@ -222,18 +357,28 @@ const ProductCard: React.FC<any> = ({ product, onAdd, isOutOfStock }) => {
     const units = ['KG', 'Tray', '5kg Bag', '10kg Bag', 'Ea'];
 
     return (
-        <div className={`bg-white rounded-[2.5rem] border border-gray-100 p-8 flex flex-col h-full shadow-sm hover:shadow-xl transition-all group ${isOutOfStock ? 'opacity-75 grayscale-[0.5]' : ''}`}>
-            <div className="mb-6">
-                <h3 className="text-2xl text-gray-900 font-black uppercase tracking-tight leading-none">{product.name}</h3>
-                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] mt-3 flex items-center gap-1.5"><Leaf size={14}/> Saves {product.co2SavingsPerKg?.toFixed(1) || '0.8'}kg CO2/kg</p>
+        <div className={`bg-white rounded-[2.5rem] border border-gray-100 p-10 flex flex-col h-full shadow-sm hover:shadow-xl transition-all group ${isOutOfStock ? 'opacity-75 grayscale-[0.5]' : ''}`}>
+            <div className="mb-8">
+                <h3 className="text-2xl text-gray-900 font-black uppercase tracking-tight leading-none mb-1">{product.name}</h3>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">{product.variety}</p>
+                <div className="flex flex-col gap-2 mt-4">
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                        <Wind size={14}/> Saves {product.co2SavingsPerKg?.toFixed(1) || '0.8'}kg CO2/kg
+                    </p>
+                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                        <Droplets size={14}/> Saves {product.waterSavingsPerKg?.toFixed(0) || '50'}L Water/kg
+                    </p>
+                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                        <Recycle size={14}/> {product.wasteDivertedPerKg?.toFixed(1) || '1.0'}kg Diverted/kg
+                    </p>
+                </div>
             </div>
 
             <div className="mt-auto space-y-6">
-                {/* Unit Selector */}
                 <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block">Purchase Unit</label>
                     <div className="relative group">
-                        <Package size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-emerald-500 transition-colors"/>
+                        <Package size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none group-focus-within:text-emerald-500 transition-colors"/>
                         <select 
                             className="w-full pl-11 pr-10 py-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold text-sm text-gray-900 outline-none focus:ring-4 focus:ring-emerald-500/5 focus:bg-white transition-all appearance-none"
                             value={unit}
@@ -272,21 +417,28 @@ export const Marketplace: React.FC<MarketplaceProps> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
+
+  const canAddProducts = user?.role === UserRole.ADMIN || user?.role === UserRole.WHOLESALER || user?.role === UserRole.FARMER;
 
   useEffect(() => {
-    setProducts(mockService.getAllProducts());
+    const load = () => {
+        setProducts(mockService.getAllProducts());
+    };
+    load();
+    const interval = setInterval(load, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const addToCart = (product: Product, qty: number, unit: string) => {
       setCart(prev => {
-          // Check for existing product with the same unit
           const existing = prev.find(i => i.productId === product.id && i.unit === unit);
           if (existing) return prev.map(i => (i.productId === product.id && i.unit === unit) ? { ...i, qty: i.qty + qty } : i);
           
           return [...prev, { 
               productId: product.id, 
               productName: product.name, 
-              price: product.defaultPricePerKg, // Price still used in background calculation
+              price: product.defaultPricePerKg, 
               qty, 
               imageUrl: product.imageUrl,
               unit: unit
@@ -335,6 +487,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({ user }) => {
                         onChange={(e) => setSearchTerm(e.target.value)} 
                     />
                 </div>
+                {canAddProducts && (
+                    <button 
+                        onClick={() => setIsAddProductModalOpen(true)}
+                        className="px-6 bg-white text-emerald-600 border-2 border-emerald-600 rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest hover:bg-emerald-50 transition-all flex items-center justify-center gap-2 active:scale-95"
+                    >
+                        <Plus size={20}/> ADD PRODUCT
+                    </button>
+                )}
                 <button 
                     onClick={() => setIsCheckoutOpen(true)} 
                     disabled={cart.length === 0}
@@ -378,6 +538,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({ user }) => {
             cart={cart}
             products={products}
             onPlaceOrder={handlePlaceOrder}
+        />
+
+        <AddProductModal 
+            isOpen={isAddProductModalOpen}
+            onClose={() => setIsAddProductModalOpen(false)}
+            onComplete={() => setProducts(mockService.getAllProducts())}
         />
     </div>
   );
