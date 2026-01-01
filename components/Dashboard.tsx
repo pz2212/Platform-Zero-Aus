@@ -1,18 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Order, Product, Customer, SupplierPriceRequest, UserRole, AppNotification, RegistrationRequest, InventoryItem } from '../types';
+import { User, Order, Product, Customer, UserRole, InventoryItem, Driver, Packer, AppNotification } from '../types';
 import { mockService } from '../services/mockDataService';
 import { AiOpportunityMatcher } from './AiOpportunityMatcher';
-import { DeliListingForm } from './DeliListingForm';
 import { Settings as SettingsComponent } from './Settings';
-import { InviteBuyerModal } from './InviteBuyerModal';
-import { InterestsModal } from './InterestsModal';
 import { triggerNativeSms, generateProductDeepLink } from '../services/smsService';
 import { 
   Package, Truck, MapPin, LayoutDashboard, 
   Users, Clock, CheckCircle, X, Mail, Smartphone, Building,
   Settings, Calculator, FileText, ChevronRight, LayoutGrid, Search, Bell, History, Calendar, Printer, AlertTriangle, TrendingUp, Globe, Star, UserPlus, ArrowUpRight,
-  Plus, Store, MessageSquare, Camera, Image as ImageIcon, Loader2, Send, ChevronDown, DollarSign, HelpCircle, Sparkles, ArrowLeft, ShoppingCart, ShoppingBag
+  Plus, Store, MessageSquare, Camera, Image as ImageIcon, Loader2, Send, ChevronDown, DollarSign,
+  Briefcase, Boxes, ClipboardCheck, UserCheck, Timer, ArrowRight, ShoppingCart, Check, Zap, HandCoins, Target, MessageCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,99 +18,166 @@ interface DashboardProps {
   user: User;
 }
 
-const AU_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'];
+const OrderFulfillmentModal = ({ isOpen, onClose, order, products, customers, onUpdate }: any) => {
+    const [selectedPacker, setSelectedPacker] = useState('');
+    const [selectedDriver, setSelectedDriver] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
 
-const SA_PRODUCE_MARKET_SUPPLIERS = [
-    { name: 'AMJ Produce', mobile: '08 8349 4500', email: 'sales@amjproduce.com.au', location: 'Burma Drive, Pooraka', specialty: 'Fruit & Veg' },
-    { name: 'Bache Bros', mobile: '08 8349 4555', email: 'bachebros@internode.on.net', location: 'Pooraka Market', specialty: 'Potatoes & Onions' },
-    { name: 'Ceravolo Orchards', mobile: '08 8389 6188', email: 'info@ceravolo.com.au', location: 'Adelaide Hills / Pooraka', specialty: 'Apples, Pears, Cherries' },
-    { name: 'Costa Group (SA)', mobile: '08 8349 4544', email: 'sa.sales@costagroup.com.au', location: 'Market Complex, Pooraka', specialty: 'Global Produce' },
-    { name: 'GD Produce', mobile: '08 8349 4444', email: 'sales@gdproduce.com.au', location: 'Wholesale Store 12', specialty: 'Leafy Greens' },
-    { name: 'Mackays Produce', mobile: '08 8349 4333', email: 'sales@mackays.com.au', location: 'Wholesale Store 45', specialty: 'Bananas & Tropical' },
-    { name: 'Perfection Fresh', mobile: '08 8349 4222', email: 'sales@perfection.com.au', location: 'Pooraka Hub', specialty: 'Branded Specialty' },
-    { name: 'Quality Produce International', mobile: '08 8349 4111', email: 'info@qpi.com.au', location: 'Pooraka Market Store', specialty: 'Export Quality' },
-    { name: 'SA Potato Company', mobile: '08 8349 4000', email: 'admin@sapota.com.au', location: 'Potatoes Central', specialty: 'Potatoes' },
-    { name: 'Vizzarri Farms', mobile: '08 8349 3999', email: 'admin@vizzarri.com.au', location: 'Pooraka HQ', specialty: 'Fresh Herbs' },
-];
+    if (!isOpen || !order) return null;
 
-const SendPhotoOfferModal = ({ isOpen, onClose, supplier, products }: any) => {
-    const [image, setImage] = useState<string | null>(null);
-    const [price, setPrice] = useState('');
-    const [productId, setProductId] = useState('');
-    const [minOrder, setMinOrder] = useState('');
-    const [logisticsPrice, setLogisticsPrice] = useState('');
-    const [description, setDescription] = useState('');
-    const [isSending, setIsSending] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    if (!isOpen) return null;
-
-    const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) {
-            const reader = new FileReader();
-            reader.onload = (ev) => setImage(ev.target?.result as string);
-            reader.readAsDataURL(e.target.files[0]);
-        }
+    const buyer = customers.find((c: any) => c.id === order.buyerId);
+    
+    const handleAccept = async () => {
+        setIsProcessing(true);
+        mockService.acceptOrderV2(order.id);
+        await new Promise(r => setTimeout(r, 600));
+        setIsProcessing(false);
+        onUpdate();
     };
 
-    const handleSend = () => {
-        if (!supplier?.mobile) {
-            alert("No mobile number attached to this profile.");
-            return;
+    const handlePack = async () => {
+        if (!selectedPacker) return alert("Assign a packer first.");
+        setIsProcessing(true);
+        mockService.packOrder(order.id, selectedPacker);
+        await new Promise(r => setTimeout(r, 600));
+        setIsProcessing(false);
+        onUpdate();
+    };
+
+    const handleDispatch = async () => {
+        if (!selectedDriver) return alert("Assign a driver first.");
+        setIsProcessing(true);
+        const targetOrder = mockService.getOrders('u1').find(o => o.id === order.id);
+        if (targetOrder) {
+            targetOrder.status = 'Shipped';
+            targetOrder.shippedAt = new Date().toISOString();
+            targetOrder.logistics = { ...targetOrder.logistics, driverName: selectedDriver };
         }
-        setIsSending(true);
-        const productObj = products.find((p: any) => p.id === productId);
-        const productName = productObj?.name || "Fresh Produce";
-        const link = generateProductDeepLink('quote', Math.random().toString(36).substr(2, 9));
-        const message = `PZ OFFER: ${productName}\nPrice: $${price}/kg\nMin Order: ${minOrder}kg\nLogistics: $${logisticsPrice}\nDescription: ${description}\n\nView product photo & accept offer here: ${link}`;
-        triggerNativeSms(supplier.mobile, message);
-        setTimeout(() => {
-            setIsSending(false);
-            alert(`Offer dispatched to ${supplier.name}!`);
-            onClose();
-        }, 1200);
+        await new Promise(r => setTimeout(r, 600));
+        setIsProcessing(false);
+        onUpdate();
+        onClose();
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
-            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
-                    <div>
-                        <h2 className="text-xl font-black text-gray-900 uppercase">Send Photo Offer</h2>
-                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">To: {supplier.name}</p>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 flex flex-col max-h-[90vh]">
+                <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-[#043003] rounded-2xl flex items-center justify-center text-white font-black shadow-lg">P</div>
+                        <div>
+                            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight leading-none">Order Fulfillment</h2>
+                            <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest mt-1.5">REF: #{order.id.split('-').pop()} • {buyer?.businessName}</p>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                    <button onClick={onClose} className="text-gray-300 hover:text-gray-900 p-2 bg-white rounded-full border border-gray-100 shadow-sm transition-all"><X size={24} strokeWidth={2.5}/></button>
                 </div>
-                <div className="p-8 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
-                    <div 
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`h-48 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all ${image ? 'border-emerald-500' : 'border-gray-200 hover:border-indigo-400 hover:bg-gray-50'}`}
-                    >
-                        {image ? <img src={image} className="w-full h-full object-cover" alt="Preview"/> : (
-                            <div className="text-center">
-                                <Camera size={32} className="text-gray-300 mx-auto mb-2"/>
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Select Product Photo</p>
+
+                <div className="flex-1 overflow-y-auto p-10 custom-scrollbar grid grid-cols-1 lg:grid-cols-2 gap-10 bg-white">
+                    <div className="space-y-8">
+                        <div>
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+                                <FileText size={14}/> PRODUCT PACKING LIST
+                            </h3>
+                            <div className="divide-y divide-gray-50 border border-gray-100 rounded-3xl overflow-hidden bg-gray-50/30">
+                                {order.items.map((item: any, idx: number) => {
+                                    const p = products.find((prod: any) => prod.id === item.productId);
+                                    return (
+                                        <div key={idx} className="p-4 flex items-center justify-between hover:bg-white transition-all">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-xl overflow-hidden border border-gray-100 shrink-0">
+                                                    <img src={p?.imageUrl} className="w-full h-full object-cover" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-gray-900 text-sm uppercase truncate max-w-[120px]">{p?.name}</p>
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{p?.variety}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-black text-gray-900 text-lg tracking-tighter">{item.quantityKg}{p?.unit || 'kg'}</p>
+                                                <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">${item.pricePerKg.toFixed(2)}/u</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div className="p-6 bg-indigo-50/30 rounded-3xl border border-indigo-100 flex items-start gap-4">
+                            <MapPin className="text-indigo-500 mt-1 shrink-0" size={20}/>
+                            <div>
+                                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Delivery Coordinates</p>
+                                <p className="text-sm font-black text-gray-900 mt-1">{buyer?.onboardingData?.deliveryAddress || 'Market Location: ' + buyer?.location}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-8">
+                        {order.status === 'Pending' ? (
+                            <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                                <div className="bg-orange-50 border border-orange-100 p-8 rounded-[2rem] text-center space-y-4">
+                                    <Clock size={40} className="mx-auto text-orange-400 animate-pulse" />
+                                    <h4 className="text-xl font-black text-orange-900 uppercase tracking-tight">Market Acceptance Required</h4>
+                                    <p className="text-sm text-orange-700 font-medium">Verify stock availability before committing to the buyer.</p>
+                                    <button onClick={handleAccept} disabled={isProcessing} className="w-full py-5 bg-[#043003] hover:bg-black text-white rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all">
+                                        {isProcessing ? <Loader2 className="animate-spin" /> : <><CheckCircle size={20}/> Confirm Availability</>}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-8">
+                                <div className="flex justify-between items-center px-2">
+                                    {['ACCEPTED', 'PACKED', 'SHIPPED'].map((s, idx) => {
+                                        const isActive = (s === 'ACCEPTED' && order.status === 'Confirmed') || (s === 'PACKED' && order.status === 'Ready for Delivery') || (s === 'SHIPPED' && order.status === 'Shipped');
+                                        const isPast = (s === 'ACCEPTED' && ['Ready for Delivery', 'Shipped', 'Delivered'].includes(order.status)) || (s === 'PACKED' && ['Shipped', 'Delivered'].includes(order.status));
+                                        return (
+                                            <div key={s} className="flex flex-col items-center gap-2">
+                                                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isPast ? 'bg-emerald-500 border-emerald-500 text-white' : isActive ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-300'}`}>
+                                                    {isPast ? <Check size={14} strokeWidth={4}/> : <span className="text-[10px] font-black">{idx + 1}</span>}
+                                                </div>
+                                                <span className={`text-[8px] font-black uppercase tracking-widest ${isActive || isPast ? 'text-gray-900' : 'text-gray-300'}`}>{s}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <div className={`p-8 rounded-[2rem] border transition-all ${order.status === 'Confirmed' ? 'bg-white border-indigo-200 shadow-lg' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${order.status === 'Confirmed' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                                            <Boxes size={24}/>
+                                        </div>
+                                        <h4 className="font-black text-gray-900 uppercase text-sm tracking-widest">Assign Packing</h4>
+                                    </div>
+                                    <select disabled={order.status !== 'Confirmed'} className="w-full p-4 bg-white border border-gray-200 rounded-xl font-black text-[10px] uppercase tracking-widest mb-4" value={selectedPacker} onChange={(e) => setSelectedPacker(e.target.value)}>
+                                        <option value="">Choose Personnel...</option>
+                                        <option value="Alex Packer">Alex Packer</option>
+                                        <option value="Sam Sort">Sam Sort</option>
+                                    </select>
+                                    {order.status === 'Confirmed' && (
+                                        <button onClick={handlePack} disabled={!selectedPacker} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">Mark as Packed</button>
+                                    )}
+                                </div>
+                                <div className={`p-8 rounded-[2rem] border transition-all ${order.status === 'Ready for Delivery' ? 'bg-white border-emerald-200 shadow-lg' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${order.status === 'Ready for Delivery' ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                                            <Truck size={24}/>
+                                        </div>
+                                        <h4 className="font-black text-gray-900 uppercase text-sm tracking-widest">Dispatch Fleet</h4>
+                                    </div>
+                                    <select disabled={order.status !== 'Ready for Delivery'} className="w-full p-4 bg-white border border-gray-200 rounded-xl font-black text-[10px] uppercase tracking-widest mb-4" value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)}>
+                                        <option value="">Assign Driver...</option>
+                                        <option value="Dave Transit">Dave Transit</option>
+                                        <option value="Route Hub">External: PZ Hub</option>
+                                    </select>
+                                    {order.status === 'Ready for Delivery' && (
+                                        <button onClick={handleDispatch} disabled={!selectedDriver} className="w-full py-4 bg-emerald-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2">Confirm Dispatch</button>
+                                    )}
+                                </div>
                             </div>
                         )}
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFile}/>
                     </div>
-                    <div className="space-y-4">
-                        <select className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none" value={productId} onChange={e => setProductId(e.target.value)}>
-                            <option value="">Select Category...</option>
-                            {products.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                        <textarea placeholder="e.g. Premium Grade A..." className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm h-20 resize-none outline-none" value={description} onChange={e => setDescription(e.target.value)}/>
-                        <div className="grid grid-cols-1 gap-4">
-                            <input type="number" placeholder="Price ($/kg)" className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none" value={price} onChange={e => setPrice(e.target.value)}/>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <input type="number" placeholder="Min Order (kg)" className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none" value={minOrder} onChange={e => setMinOrder(e.target.value)}/>
-                            <input type="number" placeholder="Logistics ($)" className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl font-bold text-sm outline-none" value={logisticsPrice} onChange={e => setLogisticsPrice(e.target.value)}/>
-                        </div>
-                    </div>
-                    <button onClick={handleSend} disabled={isSending || !image || !price} className="w-full py-4 bg-[#043003] text-white rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-xl disabled:opacity-50">
-                        {isSending ? <Loader2 className="animate-spin" size={18}/> : <><Send size={16}/> Dispatch Offer</>}
-                    </button>
+                </div>
+                <div className="p-8 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">Platform Zero Operations Protocol v2.5</p>
+                    <button onClick={onClose} className="px-10 py-3 bg-white border-2 border-gray-200 text-gray-400 rounded-xl font-black uppercase text-[10px] tracking-widest">Back</button>
                 </div>
             </div>
         </div>
@@ -121,501 +186,458 @@ const SendPhotoOfferModal = ({ isOpen, onClose, supplier, products }: any) => {
 
 export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('Home');
-  const [orderSubTab, setOrderSubTab] = useState('PENDING');
-  const [selectedState, setSelectedState] = useState('SA');
+  const [activeTab, setActiveTab] = useState<'ORDERS' | 'BUYING' | 'SCANNER' | 'BUYERS' | 'SETTINGS'>('ORDERS');
+  const [orderSubTab, setOrderSubTab] = useState<'INCOMING' | 'PROCESSING' | 'ACTIVE' | 'HISTORY'>('INCOMING');
+  
   const [orders, setOrders] = useState<Order[]>([]);
+  const [buyingOrders, setBuyingOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [leads, setLeads] = useState<RegistrationRequest[]>([]);
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSupplierForPhoto, setSelectedSupplierForPhoto] = useState<any>(null);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [isInterestsModalOpen, setIsInterestsModalOpen] = useState(false);
-  const [marketLots, setMarketLots] = useState<{product: Product, item: InventoryItem}[]>([]);
+  const [matchingDemand, setMatchingDemand] = useState<any[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  
+  // Buying List Logic
+  const [suppliers, setSuppliers] = useState<User[]>([]);
+  const [supplierInventory, setSupplierInventory] = useState<Record<string, InventoryItem[]>>({});
+  const [expandedSupplierId, setExpandedSupplierId] = useState<string | null>(null);
 
   const products = mockService.getAllProducts();
 
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 5000);
-    if ((!user.activeSellingInterests || user.activeSellingInterests.length === 0) && (!user.activeBuyingInterests || user.activeBuyingInterests.length === 0)) {
-        setIsInterestsModalOpen(true);
-    }
     return () => clearInterval(interval);
   }, [user]);
 
   const loadData = () => {
-    const allOrders = mockService.getOrders(user.id).filter(o => o.sellerId === user.id);
-    setOrders(allOrders);
+    const allSellingOrders = mockService.getOrders(user.id).filter(o => o.sellerId === user.id);
+    setOrders(allSellingOrders);
+    const allBuyingOrders = mockService.getOrders(user.id).filter(o => o.buyerId === user.id);
+    setBuyingOrders(allBuyingOrders);
     setCustomers(mockService.getCustomers());
-    setNotifications(mockService.getAppNotifications(user.id));
-    setLeads(mockService.getRegistrationRequests().filter(r => r.status === 'Pending'));
 
-    // Wholesale Market logic (Right Panel)
-    const inventory = mockService.getAllInventory();
-    const now = new Date();
-    const aged = inventory.filter(item => {
-        if (item.status !== 'Available') return false;
-        const uploadedAt = new Date(item.uploadedAt);
-        const diffDays = (now.getTime() - uploadedAt.getTime()) / (1000 * 60 * 60 * 24);
-        return diffDays >= (item.discountAfterDays || 3);
-    }).map(item => ({
-        item,
-        product: products.find(p => p.id === item.productId)!
-    })).filter(x => !!x.product);
-    setMarketLots(aged);
+    // Industry Intelligence Matching
+    const myInterests = user.activeSellingInterests || ['Tomatoes', 'Lettuce', 'Eggplants'];
+    const matched = mockService.getCustomers().filter(c => 
+        myInterests.some(interest => c.commonProducts?.toLowerCase().includes(interest.toLowerCase()))
+    ).map(c => ({
+        ...c,
+        matchingInterest: myInterests.find(i => c.commonProducts?.toLowerCase().includes(i.toLowerCase()))
+    }));
+    setMatchingDemand(matched);
+
+    // Buying View Data
+    const allUsers = mockService.getAllUsers();
+    const networkSuppliers = allUsers.filter(u => u.id !== user.id && (u.role === UserRole.WHOLESALER || u.role === UserRole.FARMER));
+    setSuppliers(networkSuppliers);
+    
+    const invMap: Record<string, InventoryItem[]> = {};
+    networkSuppliers.forEach(s => {
+        invMap[s.id] = mockService.getInventory(s.id).filter(i => i.status === 'Available');
+    });
+    setSupplierInventory(invMap);
   };
 
-  const handleAcceptOrder = (e: React.MouseEvent, orderId: string) => {
-    e.stopPropagation();
-    mockService.acceptOrderV2(orderId);
-    loadData();
-    alert("Order Accepted!");
+  const incomingQueue = orders.filter(o => o.status === 'Pending');
+  const processingQueue = orders.filter(o => ['Confirmed', 'Ready for Delivery'].includes(o.status));
+  const activeFulfillment = orders.filter(o => o.status === 'Shipped');
+  const pastOrders = orders.filter(o => ['Delivered', 'Cancelled'].includes(o.status));
+
+  const currentSellingList = orderSubTab === 'INCOMING' ? incomingQueue : 
+                           orderSubTab === 'PROCESSING' ? processingQueue :
+                           orderSubTab === 'ACTIVE' ? activeFulfillment : pastOrders;
+
+  const handlePurchaseFromBuying = (supplierId: string, item: InventoryItem) => {
+      const product = products.find(p => p.id === item.productId);
+      if (!product) return;
+      
+      const confirmMsg = `Initiate purchase for ${item.quantityKg}${product.unit || 'kg'} of ${product.name} from ${suppliers.find(s => s.id === supplierId)?.businessName}?\nTotal: $${(item.quantityKg * product.defaultPricePerKg).toFixed(2)} + $${(item.logisticsPrice || 0).toFixed(2)} logistics.`;
+      if (window.confirm(confirmMsg)) {
+          mockService.createInstantOrder(user.id, item, item.quantityKg, product.defaultPricePerKg);
+          alert("Purchase successful! Check your Buying history.");
+          loadData();
+      }
   };
-
-  const pendingAcceptance = orders.filter(o => o.status === 'Pending');
-  const acceptedOrders = orders.filter(o => o.status === 'Confirmed' || o.status === 'Ready for Delivery' || o.status === 'Shipped');
-  const fulfilledOrders = orders.filter(o => o.status === 'Delivered');
-
-  const displayedOrders = orderSubTab === 'PENDING' ? pendingAcceptance : orderSubTab === 'ACCEPTED' ? acceptedOrders : fulfilledOrders;
-
-  const filteredCustomers = customers.filter(c => 
-    c.connectedSupplierId === user.id && 
-    (c.businessName.toLowerCase().includes(searchTerm.toLowerCase()) || c.contactName.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const filteredSaSuppliers = selectedState === 'SA' 
-    ? SA_PRODUCE_MARKET_SUPPLIERS.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.specialty.toLowerCase().includes(searchTerm.toLowerCase()))
-    : [];
-
-  const getStatusConfig = (status: string | undefined) => {
-    switch(status) {
-        case 'Active': return { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', icon: CheckCircle };
-        case 'Pending Connection': return { color: 'text-orange-600 bg-orange-50 border-orange-100', icon: Clock };
-        case 'Pricing Pending': return { color: 'text-blue-600 bg-blue-50 border-blue-100', icon: DollarSign };
-        default: return { color: 'text-gray-500 bg-gray-50 border-gray-100', icon: HelpCircle };
-    }
-  };
-
-  const menuButtons = [
-    { 
-        id: 'Platform Zero', 
-        label: 'Platform Zero', 
-        icon: Sparkles, 
-        color: 'bg-emerald-600', 
-        desc: 'Hub',
-        badge: leads.length + notifications.filter(n => !n.isRead).length
-    },
-    { 
-        id: 'SELL', 
-        label: 'Scanner', 
-        icon: Camera, 
-        color: 'bg-indigo-600', 
-        desc: 'AI Matching' 
-    },
-    { 
-        id: 'Orders', 
-        label: 'Orders', 
-        icon: LayoutGrid, 
-        color: 'bg-slate-900', 
-        desc: 'Trade',
-        badge: pendingAcceptance.length
-    },
-    { 
-        id: 'Customers', 
-        label: 'Buyers', 
-        icon: Users, 
-        color: 'bg-slate-900', 
-        desc: 'Directory' 
-    },
-    { 
-        id: 'Suppliers', 
-        label: 'Vendors', 
-        icon: Store, 
-        color: 'bg-slate-900', 
-        desc: 'Network' 
-    }
-  ];
 
   return (
     <div className="animate-in fade-in duration-500 min-h-screen pb-20">
+      
       {/* HEADER SECTION */}
-      <div className="mb-10 flex justify-between items-start">
+      <div className="mb-12 border-b border-gray-100 pb-10 px-2 space-y-10">
         <div>
-            {activeTab !== 'Home' && (
-                <button 
-                    onClick={() => setActiveTab('Home')}
-                    className="mb-4 flex items-center gap-2 text-gray-400 hover:text-gray-900 font-black text-[10px] uppercase tracking-widest transition-all"
-                >
-                    <ArrowLeft size={16}/> Control Center
-                </button>
-            )}
-            <h1 className="text-[42px] font-black text-[#0F172A] tracking-tighter uppercase leading-none">
-                {activeTab === 'Home' ? 'Partner Operations' : activeTab}
-            </h1>
-            <p className="text-gray-500 font-medium text-sm mt-2">
-                {activeTab === 'Home' ? `Management Console • ${user.businessName}` : `Managing your ${activeTab.toLowerCase()} interface.`}
+            <h1 className="text-[44px] font-black text-[#0F172A] tracking-tighter uppercase leading-none">Partner Operations</h1>
+            <p className="text-gray-400 font-bold text-sm tracking-tight mt-2 flex items-center gap-3 uppercase">
+                Management Console <span className="w-1.5 h-1.5 rounded-full bg-gray-200"></span> {user.businessName}
             </p>
         </div>
-        {activeTab === 'Home' && (
-            <button onClick={() => setActiveTab('Settings')} className="p-4 bg-white border border-gray-100 rounded-3xl text-gray-400 hover:text-gray-900 shadow-sm transition-all hover:shadow-md">
-                <Settings size={28}/>
-            </button>
-        )}
+        
+        <div className="flex bg-gray-100 p-1.5 rounded-2xl gap-1 border border-gray-200 shadow-inner-sm w-full md:w-max overflow-x-auto no-scrollbar">
+            {[
+                { id: 'ORDERS', label: 'Orders', icon: LayoutGrid },
+                { id: 'BUYING', label: 'Buying', icon: ShoppingCart },
+                { id: 'SCANNER', label: 'Scanner', icon: Camera },
+                { id: 'BUYERS', label: 'Buyers', icon: Users },
+                { id: 'SETTINGS', label: 'Config', icon: Settings }
+            ].map(tab => (
+                <button 
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`flex-1 md:flex-none px-8 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                    <tab.icon size={14}/> {tab.label}
+                </button>
+            ))}
+        </div>
       </div>
 
-      {/* MAIN VIEW - HOME GRID */}
-      {activeTab === 'Home' && (
-        <div className="space-y-12 animate-in slide-in-from-bottom-4 duration-500">
+      {activeTab === 'ORDERS' && (
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 px-2">
             
-            {/* PLATFORM ZERO ORDERS TO ACCEPT */}
-            {pendingAcceptance.length > 0 && (
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between px-2">
-                        <div className="flex items-center gap-2 text-red-600 font-black text-[11px] uppercase tracking-[0.25em]">
-                            <AlertTriangle size={16}/> Orders Awaiting Acceptance
-                        </div>
-                        <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">{pendingAcceptance.length} Action Items</span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                        {pendingAcceptance.slice(0, 2).map(order => {
-                            const buyer = customers.find(c => c.id === order.buyerId);
-                            return (
-                                <div key={order.id} className="bg-white rounded-[2rem] border-2 border-red-50 p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm hover:shadow-md transition-all group">
-                                    <div className="flex items-center gap-5 flex-1">
-                                        <div className="w-14 h-14 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner-sm shrink-0 uppercase border border-red-100">
-                                            {buyer?.businessName.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <h4 className="text-lg font-black text-gray-900 uppercase tracking-tight leading-none mb-1.5">{buyer?.businessName}</h4>
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Package size={12}/> {order.items.length} Varieties • Ref: #{order.id.split('-').pop()}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
-                                        <div className="text-right">
-                                            <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-0.5">Trade Total</p>
-                                            <p className="text-2xl font-black text-emerald-600 tracking-tighter">${order.totalAmount.toFixed(2)}</p>
-                                        </div>
-                                        <button 
-                                            onClick={(e) => handleAcceptOrder(e, order.id)}
-                                            className="px-10 py-4 bg-emerald-600 hover:bg-black text-white font-black rounded-2xl text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-emerald-100 transition-all flex items-center gap-2 group-hover:scale-105"
-                                        >
-                                            <CheckCircle size={18}/> Accept Order
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {/* SPLIT PRIMARY WORKSPACES */}
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-                
-                {/* LEFT: DELI STOREFRONT MANAGER */}
-                <div className="xl:col-span-7">
-                    <div className="h-full">
-                        <DeliListingForm user={user} onComplete={loadData} />
-                    </div>
-                </div>
-
-                {/* RIGHT: LIVE WHOLESALE MARKET FEED */}
-                <div className="xl:col-span-5">
-                    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[650px]">
-                        <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center shrink-0">
-                            <div>
-                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-3">
-                                    <Globe className="text-indigo-600" size={24}/> Wholesale Market
-                                </h3>
-                                <p className="text-[10px] font-black text-indigo-50 uppercase tracking-widest mt-1">Live Network Procurement</p>
+            {/* LEFT SIDE: ORDER FULFILLMENT PIPELINE (8 Columns) */}
+            <div className="xl:col-span-8 space-y-8 animate-in slide-in-from-left-4 duration-700">
+                <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[700px]">
+                    <div className="p-10 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-center gap-8 shrink-0">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-gray-900 shadow-md border border-gray-100 shrink-0">
+                                <LayoutGrid size={28}/>
                             </div>
-                            <button onClick={() => navigate('/grocer/marketplace')} className="p-2 bg-white rounded-xl shadow-sm border border-gray-100 text-gray-400 hover:text-indigo-600 transition-all"><ArrowUpRight size={20}/></button>
+                            <div>
+                                <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase leading-none">Fulfillment Pipeline</h2>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Managing your direct sales trade flow</p>
+                            </div>
                         </div>
-                        
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-                            {marketLots.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-center p-12 opacity-30">
-                                    <ShoppingBag size={48} className="text-gray-300 mb-4" />
-                                    <p className="text-xs font-black uppercase tracking-widest">No wholesale lots listed today</p>
-                                </div>
-                            ) : marketLots.map(({ product, item }, idx) => (
-                                <div key={idx} className="p-5 bg-white border border-gray-50 rounded-3xl shadow-sm hover:shadow-md transition-all group">
-                                    <div className="flex items-center gap-5 mb-4">
-                                        <div className="w-14 h-14 rounded-2xl overflow-hidden bg-gray-100 border border-gray-50 shrink-0">
-                                            <img src={product.imageUrl} className="w-full h-full object-cover" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="font-black text-gray-900 text-base uppercase tracking-tight truncate">{product.name}</h4>
-                                            <div className="flex items-center gap-3 mt-1">
-                                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{product.variety}</span>
-                                                <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">{item.quantityKg}kg Ready</span>
+
+                        <div className="bg-gray-100 p-1 rounded-2xl flex gap-1 border border-gray-200 shadow-inner-sm w-full md:w-auto">
+                            {[
+                                { id: 'INCOMING', label: 'Incoming', count: incomingQueue.length, icon: Bell, color: 'text-orange-500' },
+                                { id: 'PROCESSING', label: 'Processing', count: processingQueue.length, icon: Package, color: 'text-indigo-500' },
+                                { id: 'ACTIVE', label: 'Active Runs', count: activeFulfillment.length, icon: Truck, color: 'text-emerald-500' },
+                                { id: 'HISTORY', label: 'History', count: null, icon: History, color: 'text-gray-400' }
+                            ].map((sub) => (
+                                <button 
+                                    key={sub.id}
+                                    onClick={() => setOrderSubTab(sub.id as any)}
+                                    className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${orderSubTab === sub.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    <sub.icon size={14} className={orderSubTab === sub.id ? sub.color : 'text-gray-400'}/> {sub.label} 
+                                    {sub.count !== null && sub.count > 0 && <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black text-white ${sub.color.replace('text-', 'bg-')}`}>{sub.count}</span>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-4">
+                        {currentSellingList.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center opacity-30 py-32 grayscale">
+                                <ShoppingCart size={64} className="mb-6 text-gray-200" />
+                                <p className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">No active orders in this phase</p>
+                            </div>
+                        ) : (
+                            currentSellingList.map(order => {
+                                const buyer = customers.find(c => c.id === order.buyerId);
+                                const isMarketplace = order.source === 'Marketplace';
+                                
+                                return (
+                                    <div key={order.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-50 shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all group animate-in slide-in-from-bottom-2">
+                                        <div className="flex flex-col lg:flex-row justify-between items-center gap-8">
+                                            <div className="flex items-center gap-6 flex-1 w-full">
+                                                <div className="w-16 h-16 rounded-[1.75rem] bg-gray-50 flex items-center justify-center text-gray-400 font-black text-2xl shadow-inner-sm uppercase border border-gray-50 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors shrink-0">
+                                                    {buyer?.businessName.charAt(0)}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <h4 className="text-xl font-black text-gray-900 uppercase tracking-tight leading-none truncate">{buyer?.businessName}</h4>
+                                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${
+                                                            isMarketplace 
+                                                            ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                                                            : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                                        }`}>
+                                                            {isMarketplace ? 'PZ Marketplace' : 'Customer Direct'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-4">
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5"><Calendar size={12}/> {new Date(order.date).toLocaleDateString()}</span>
+                                                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
+                                                            order.status === 'Shipped' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-50 text-gray-500 border-gray-100'
+                                                        }`}>
+                                                            {order.status}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-10 w-full lg:w-auto justify-between lg:justify-end border-t lg:border-0 border-gray-50 pt-6 lg:pt-0">
+                                                <div className="text-left lg:text-right">
+                                                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Total</p>
+                                                    <p className="text-3xl font-black text-gray-900 tracking-tighter leading-none">${order.totalAmount.toFixed(2)}</p>
+                                                </div>
+                                                
+                                                <button onClick={() => setSelectedOrder(order)} className={`px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95 ${order.status === 'Pending' ? 'bg-[#043003] text-white hover:bg-black' : 'bg-white border-2 border-indigo-100 text-indigo-600'}`}>
+                                                    {order.status === 'Pending' ? 'Accept Order' : 'Manage Ops'}
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 flex justify-between items-center">
-                                        <div>
-                                            <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">Platform Zero Rate</p>
-                                            <p className="text-xl font-black text-emerald-600 tracking-tighter">${(item.discountPricePerKg || product.defaultPricePerKg * 0.7).toFixed(2)}/kg</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest mb-1">Market Standard</p>
-                                            <p className="text-xs font-bold text-gray-400 line-through">${product.defaultPricePerKg.toFixed(2)}</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => navigate('/grocer/marketplace')} className="w-full mt-4 py-3 bg-[#0F172A] hover:bg-black text-white rounded-xl font-black text-[9px] uppercase tracking-[0.2em] shadow-lg transition-all flex items-center justify-center gap-2">
-                                        <ShoppingCart size={14}/> Procure Lot
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                        
-                        <div className="p-6 border-t border-gray-100 bg-white">
-                             <button onClick={() => navigate('/grocer/marketplace')} className="w-full py-4 border-2 border-indigo-100 text-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-indigo-50 transition-all">
-                                Open Full Marketplace
-                             </button>
-                        </div>
+                                );
+                            })
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* SECONDARY ACTION GRID */}
-            <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-6">
-                {menuButtons.map((btn) => (
-                    <button 
-                        key={btn.id}
-                        onClick={() => setActiveTab(btn.id)}
-                        className="relative group bg-white border border-gray-100 hover:border-indigo-100 rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all active:scale-[0.98]"
-                    >
-                        <div className={`w-14 h-14 ${btn.color} rounded-2xl flex items-center justify-center text-white shadow-xl mb-4 group-hover:scale-110 transition-transform duration-500`}>
-                            <btn.icon size={28} strokeWidth={2.5}/>
+            {/* RIGHT SIDE: MARKET INTELLIGENCE & BUYER DEMAND */}
+            <div className="xl:col-span-4 space-y-8 animate-in slide-in-from-right-4 duration-700">
+                <div className="bg-[#0B1221] rounded-[3.5rem] border border-white/5 shadow-2xl overflow-hidden flex flex-col h-full min-h-[700px] relative">
+                    <div className="absolute top-0 right-0 p-8 opacity-5 transform rotate-12 scale-150 pointer-events-none"><Zap size={200} className="text-emerald-400"/></div>
+                    
+                    <div className="p-10 border-b border-white/5 relative z-10">
+                        <div className="flex items-center gap-4 mb-2">
+                            <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+                                <Target size={24}/>
+                            </div>
+                            <h2 className="text-xl font-black text-white uppercase tracking-tight">Buyer Intelligence</h2>
                         </div>
-                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight mb-1">{btn.label}</h3>
-                        <p className="text-gray-400 font-bold uppercase text-[8px] tracking-widest">{btn.desc}</p>
-                        
-                        {btn.badge ? (
-                            <span className="absolute top-4 right-4 bg-red-600 text-white w-6 h-6 rounded-full flex items-center justify-center font-black text-[10px] shadow-lg ring-2 ring-white">
-                                {btn.badge}
-                            </span>
-                        ) : null}
-                    </button>
-                ))}
-                
-                <button 
-                    onClick={() => setActiveTab('Settings')}
-                    className="bg-gray-50/50 border-2 border-dashed border-gray-200 rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-center hover:bg-gray-100/80 hover:border-gray-300 transition-all group"
-                >
-                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-gray-300 shadow-sm mb-4 group-hover:rotate-45 transition-transform">
-                        <Settings size={24} />
+                        <p className="text-[9px] text-emerald-400 font-black uppercase tracking-[0.25em]">Industry-wide matching</p>
                     </div>
-                    <h3 className="text-sm font-black text-gray-400 uppercase tracking-tight">Account</h3>
-                </button>
+
+                    <div className="flex-1 overflow-y-auto p-10 space-y-6 relative z-10 custom-scrollbar">
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Buyers needing your stock</h3>
+                        
+                        {matchingDemand.length === 0 ? (
+                            <div className="py-20 text-center text-slate-500 opacity-20">
+                                <Users size={48} className="mx-auto mb-4"/>
+                                <p className="text-xs font-black uppercase tracking-widest">No active matches</p>
+                            </div>
+                        ) : matchingDemand.map(buyer => (
+                            <div key={buyer.id} className="bg-white/5 border border-white/10 rounded-[2rem] p-6 hover:bg-white/10 transition-all group">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h4 className="text-white font-black text-lg uppercase tracking-tight group-hover:text-emerald-400 transition-colors">{buyer.businessName}</h4>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <MapPin size={10} className="text-slate-500"/>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase">{buyer.location || 'Adelaide Central'}</p>
+                                        </div>
+                                    </div>
+                                    <span className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/30">Needs: {buyer.matchingInterest}</span>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    <div className="bg-white/5 rounded-xl p-3 flex items-center justify-between">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sentiment</p>
+                                        <span className="text-[10px] font-black text-emerald-400 uppercase">High Intent</span>
+                                    </div>
+                                    <button onClick={() => triggerNativeSms(buyer.phone || '0400000000', `Hi ${buyer.contactName}, this is Sarah from Fresh Wholesalers. We have premium ${buyer.matchingInterest} ready for dispatch. Interested?`)} className="w-full py-4 bg-emerald-600 hover:bg-emerald-50 text-white rounded-xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 transition-all active:scale-95">
+                                        <HandCoins size={16}/> Propose Direct Sale
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         </div>
       )}
 
-      {/* PLATFORM ZERO HUB */}
-      {activeTab === 'Platform Zero' && (
-          <div className="space-y-10 animate-in fade-in duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                  <div className="bg-white rounded-[3rem] border border-gray-100 p-12 shadow-sm">
-                      <div className="flex justify-between items-center mb-10">
-                          <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-4"><Users className="text-indigo-600" size={32}/> Marketplace Leads</h2>
-                          <span className="bg-indigo-50 text-indigo-700 px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest">{leads.length} New</span>
-                      </div>
-                      <div className="space-y-5">
-                          {leads.length === 0 ? (
-                              <div className="text-center py-16 opacity-30 grayscale">
-                                <Users size={48} className="mx-auto mb-4"/>
-                                <p className="text-sm font-bold uppercase tracking-widest">No active leads</p>
-                              </div>
-                          ) : leads.map(lead => (
-                              <div 
-                                key={lead.id} 
-                                onClick={() => navigate('/login-requests')}
-                                className="p-6 bg-gray-50 rounded-3xl flex justify-between items-center border border-transparent hover:border-indigo-200 hover:bg-white transition-all shadow-sm group cursor-pointer"
-                              >
-                                  <div>
-                                      <p className="font-black text-gray-900 uppercase text-base leading-none mb-2">{lead.businessName}</p>
-                                      <div className="flex items-center gap-3">
-                                          <span className="text-[10px] text-indigo-600 font-black uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded">{lead.requestedRole}</span>
-                                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{lead.consumerData?.location || 'Australia'}</p>
-                                      </div>
-                                  </div>
-                                  <button className="bg-white p-3 rounded-2xl text-gray-300 hover:text-indigo-600 shadow-sm border border-gray-100 transition-all group-hover:shadow-md"><ChevronRight size={20}/></button>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
+      {/* VIEW: BUYING MANAGEMENT - REFACTORED TO LIST SUPPLIERS & PRODUCTS */}
+      {activeTab === 'BUYING' && (
+        <div className="space-y-12 animate-in slide-in-from-bottom-4 duration-500 px-2">
+            <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[700px]">
+                <div className="p-10 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-center gap-8 shrink-0">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-md border border-gray-100 shrink-0">
+                            <ShoppingCart size={28}/>
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase leading-none">Supply Network</h2>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Source inventory from verified partners</p>
+                        </div>
+                    </div>
+                    
+                    <div className="bg-emerald-50 px-6 py-2.5 rounded-xl border border-emerald-100 flex items-center gap-2">
+                         <Globe size={16} className="text-emerald-600 animate-spin-slow"/>
+                         <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">{suppliers.length} Verified Partners Live</span>
+                    </div>
+                </div>
 
-                  <div className="bg-white rounded-[3rem] border border-gray-100 p-12 shadow-sm">
-                      <div className="flex justify-between items-center mb-10">
-                          <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-4"><Bell className="text-emerald-500" size={32}/> Market Activity</h2>
-                          <button className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-emerald-600 transition-colors">Clear All</button>
-                      </div>
-                      <div className="space-y-5 max-h-[500px] overflow-y-auto no-scrollbar pr-2">
-                          {notifications.map(n => (
-                              <div key={n.id} className={`p-6 rounded-3xl border-2 transition-all ${!n.isRead ? 'bg-emerald-50/50 border-emerald-100' : 'bg-white border-gray-50'}`}>
-                                  <div className="flex justify-between items-start mb-2">
-                                      <p className="font-black text-gray-900 text-sm uppercase tracking-tight leading-none">{n.title}</p>
-                                      <span className="text-[9px] text-gray-400 font-black uppercase">{new Date(n.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                  </div>
-                                  <p className="text-xs text-gray-500 leading-relaxed font-medium">{n.message}</p>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              </div>
-          </div>
+                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-6">
+                    {suppliers.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center opacity-30 py-32 grayscale">
+                            <ShoppingCart size={64} className="mb-6 text-gray-200" />
+                            <p className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">No suppliers available in your network</p>
+                        </div>
+                    ) : (
+                        suppliers.map(supplier => {
+                            const items = supplierInventory[supplier.id] || [];
+                            const isExpanded = expandedSupplierId === supplier.id;
+                            
+                            return (
+                                <div key={supplier.id} className="bg-white border border-gray-100 rounded-[2.5rem] shadow-sm overflow-hidden group transition-all hover:shadow-xl">
+                                    <div 
+                                        onClick={() => setExpandedSupplierId(isExpanded ? null : supplier.id)}
+                                        className="p-8 flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-6">
+                                            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl shadow-inner-sm border ${supplier.role === 'FARMER' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+                                                {supplier.businessName.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight leading-none mb-2">{supplier.businessName}</h3>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5"><MapPin size={10}/> {supplier.businessProfile?.businessLocation || 'Adelaide Market'}</span>
+                                                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5"><Package size={10}/> {items.length} Products</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); triggerNativeSms(supplier.phone || '0400000000', `Hi ${supplier.name}, interested in connecting regarding your produce...`); }}
+                                                className="px-6 py-3 bg-white border border-gray-200 rounded-xl text-[10px] font-black uppercase text-gray-400 hover:text-indigo-600 hover:border-indigo-100 transition-all flex items-center gap-2"
+                                            >
+                                                <Users size={14}/> Connect
+                                            </button>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setExpandedSupplierId(supplier.id); /* Open chat logic could go here */ }}
+                                                className="px-6 py-3 bg-white border border-gray-200 rounded-xl text-[10px] font-black uppercase text-gray-400 hover:text-indigo-600 hover:border-indigo-100 transition-all flex items-center gap-2"
+                                            >
+                                                <MessageCircle size={14}/> Chat
+                                            </button>
+                                            <div className={`p-2 rounded-lg bg-gray-100 text-gray-300 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                                                <ChevronDown size={20}/>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {isExpanded && (
+                                        <div className="border-t border-gray-50 bg-gray-50/20 p-8 animate-in slide-in-from-top-2 duration-300">
+                                            {items.length === 0 ? (
+                                                <div className="py-12 text-center text-gray-400 italic text-sm">No live products found for this supplier</div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                    {items.map(item => {
+                                                        const p = products.find(prod => prod.id === item.productId);
+                                                        return (
+                                                            <div key={item.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-md transition-all group/item">
+                                                                <div className="flex items-center gap-4 mb-6">
+                                                                    <div className="w-14 h-14 rounded-2xl overflow-hidden border border-gray-50 bg-gray-50 shrink-0">
+                                                                        <img src={p?.imageUrl} className="w-full h-full object-cover" />
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <h4 className="font-black text-gray-900 uppercase text-sm truncate">{p?.name}</h4>
+                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{item.quantityKg}{p?.unit || 'kg'} available</p>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="space-y-3 mb-6">
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Product Price</span>
+                                                                        <span className="text-base font-black text-emerald-600 tracking-tighter">${p?.defaultPricePerKg.toFixed(2)}/u</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Logistics Price</span>
+                                                                        <span className="text-sm font-black text-indigo-600 tracking-tight">${(item.logisticsPrice || 0).toFixed(2)}</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <button 
+                                                                    onClick={() => handlePurchaseFromBuying(supplier.id, item)}
+                                                                    className="w-full py-4 bg-indigo-600 hover:bg-black text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2 active:scale-95"
+                                                                >
+                                                                    <ShoppingCart size={16}/> Instant Purchase
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+        </div>
       )}
 
-      {/* SELL / SCANNER */}
-      {activeTab === 'SELL' && (
+      {/* VIEW: BUYERS MANAGEMENT */}
+      {activeTab === 'BUYERS' && (
+        <div className="space-y-12 animate-in slide-in-from-bottom-4 duration-500 px-2">
+            <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[700px]">
+                <div className="p-10 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-center gap-8 shrink-0">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-[#043003] shadow-md border border-gray-100 shrink-0">
+                            <Users size={28}/>
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase leading-none">Buyer Network</h2>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Manage your connected customer accounts</p>
+                        </div>
+                    </div>
+                    <button className="px-8 py-4 bg-[#043003] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:bg-black transition-all flex items-center gap-2">
+                        <Plus size={18}/> Invite New Buyer
+                    </button>
+                </div>
+                
+                <div className="p-8">
+                    <div className="relative mb-8 group">
+                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#043003] transition-colors" size={20}/>
+                        <input 
+                            placeholder="Search buyer database..." 
+                            className="w-full pl-14 pr-8 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-50 shadow-sm font-bold text-sm"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {customers.filter(c => c.connectedSupplierId === user.id).map(customer => (
+                            <div key={customer.id} className="p-8 bg-white border border-gray-100 rounded-[2.5rem] hover:shadow-xl transition-all group flex flex-col justify-between min-h-[300px]">
+                                <div>
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="w-16 h-16 bg-indigo-50 rounded-[1.25rem] flex items-center justify-center font-black text-2xl text-indigo-700 shadow-inner-sm">
+                                            {customer.businessName.charAt(0)}
+                                        </div>
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${
+                                            customer.connectionStatus === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-orange-50 text-orange-600 border-orange-100'
+                                        }`}>
+                                            {customer.connectionStatus}
+                                        </span>
+                                    </div>
+                                    <h3 className="font-black text-gray-900 text-2xl tracking-tight leading-tight mb-2 group-hover:text-indigo-600 transition-colors uppercase">{customer.businessName}</h3>
+                                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-6">{customer.category}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button className="flex-1 py-4 bg-[#0F172A] text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:bg-black transition-all">Profile</button>
+                                    <button className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100">
+                                        <MessageSquare size={20}/>
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {activeTab === 'SCANNER' && (
         <div className="animate-in fade-in zoom-in-95 duration-500">
             <AiOpportunityMatcher user={user} />
         </div>
       )}
 
-      {/* ORDERS LIST */}
-      {activeTab === 'Orders' && (
-        <div className="space-y-10 animate-in fade-in duration-300">
-            <div className="bg-gray-100/50 p-2 rounded-3xl inline-flex gap-1.5 border border-gray-200/50 shadow-inner">
-                <button onClick={() => setOrderSubTab('PENDING')} className={`px-12 py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${orderSubTab === 'PENDING' ? 'bg-white text-gray-900 shadow-lg ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'}`}>
-                    Acceptance {pendingAcceptance.length > 0 && <span className="bg-red-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[9px]">{pendingAcceptance.length}</span>}
-                </button>
-                <button onClick={() => setOrderSubTab('ACCEPTED')} className={`px-12 py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] transition-all ${orderSubTab === 'ACCEPTED' ? 'bg-white text-gray-900 shadow-lg ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'}`}>Current</button>
-                <button onClick={() => setOrderSubTab('FULFILLED')} className={`px-12 py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] transition-all ${orderSubTab === 'FULFILLED' ? 'bg-white text-gray-900 shadow-lg ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'}`}>Fulfilled</button>
-            </div>
-
-            <div className="space-y-4">
-                {displayedOrders.length === 0 ? (
-                    <div className="py-32 text-center bg-white rounded-[3.5rem] border-2 border-dashed border-gray-100 shadow-sm opacity-50 grayscale">
-                        <CheckCircle size={64} className="mx-auto text-indigo-100 mb-6"/>
-                        <p className="text-gray-400 font-black uppercase tracking-[0.3em] text-xs">No entries found</p>
-                    </div>
-                ) : displayedOrders.map(order => {
-                    const buyer = customers.find(c => c.id === order.buyerId);
-                    const isExpanded = expandedOrderId === order.id;
-                    return (
-                        <div key={order.id} onClick={() => setExpandedOrderId(isExpanded ? null : order.id)} className={`bg-white rounded-[2.5rem] border transition-all cursor-pointer overflow-hidden ${isExpanded ? 'border-gray-900 shadow-2xl z-10 relative scale-[1.01]' : 'border-gray-100 shadow-sm hover:border-indigo-100'}`}>
-                            <div className="p-8 flex flex-col md:flex-row justify-between items-center gap-10">
-                                <div className="flex items-center gap-8 flex-1">
-                                    <div className="w-16 h-16 rounded-[1.5rem] bg-gray-50 flex items-center justify-center text-gray-400 font-black text-2xl shadow-inner-sm uppercase border border-gray-100">{buyer?.businessName.charAt(0)}</div>
-                                    <div><h3 className="font-black text-gray-900 text-xl uppercase tracking-tighter mb-1">{buyer?.businessName}</h3><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ORDER REF: #{order.id.split('-').pop()} • {new Date(order.date).toLocaleDateString()}</p></div>
-                                </div>
-                                <div className="flex items-center gap-12 w-full md:w-auto justify-between md:justify-end">
-                                    <div className="text-right"><p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Trade Amount</p><p className="text-3xl font-black text-gray-900 tracking-tighter">${order.totalAmount.toFixed(2)}</p></div>
-                                    {order.status === 'Pending' ? (
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); handleAcceptOrder(e, order.id); }} 
-                                            className="px-12 py-4 bg-emerald-600 hover:bg-black text-white font-black rounded-2xl text-[11px] uppercase tracking-[0.2em] transition-all shadow-xl shadow-emerald-100 active:scale-95"
-                                        >
-                                            Accept Now
-                                        </button>
-                                    ) : (
-                                        <div className="px-8 py-3 rounded-xl bg-gray-100 text-gray-400 font-black text-[10px] uppercase tracking-[0.2em] border border-gray-200">{order.status}</div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-      )}
-
-      {/* CUSTOMERS VIEW */}
-      {activeTab === 'Customers' && (
-        <div className="space-y-12 animate-in fade-in duration-300">
-            <div className="relative w-full group max-w-4xl mx-auto">
-                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-500 transition-colors" size={24}/>
-                <input placeholder="Search global buyer network..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-16 pr-10 py-6 bg-white border-2 border-gray-100 rounded-[2.5rem] outline-none focus:ring-8 focus:ring-indigo-50/50 focus:border-indigo-400 shadow-xl font-black text-lg uppercase tracking-tight transition-all" />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                {filteredCustomers.map(customer => {
-                    const statusCfg = getStatusConfig(customer.connectionStatus);
-                    const StatusIcon = statusCfg.icon;
-                    return (
-                        <div key={customer.id} className="p-12 bg-white border border-gray-100 rounded-[3.5rem] hover:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] transition-all group flex flex-col justify-between min-h-[460px] animate-in zoom-in-95">
-                            <div>
-                                <div className="flex justify-between items-start mb-10">
-                                    <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center font-black text-3xl text-indigo-700 shadow-inner-sm border border-indigo-100/50">{customer.businessName.charAt(0)}</div>
-                                    <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border shadow-sm ${statusCfg.color}`}><StatusIcon size={16}/><span className="text-[10px] font-black uppercase tracking-widest">{customer.connectionStatus || 'Active'}</span></div>
-                                </div>
-                                <h3 className="font-black text-gray-900 text-3xl tracking-tighter leading-none mb-3 group-hover:text-indigo-600 transition-colors uppercase">{customer.businessName}</h3>
-                                <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.2em] mb-10">{customer.category}</p>
-                            </div>
-                            <button 
-                                onClick={() => navigate('/customer-portal')}
-                                className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black text-xs uppercase tracking-[0.25em] shadow-2xl hover:bg-black transition-all"
-                            >
-                                Open Records
-                            </button>
-                        </div>
-                    );
-                })}
-                <div onClick={() => setIsInviteModalOpen(true)} className="border-4 border-dashed border-gray-100 rounded-[3.5rem] p-12 flex flex-col items-center justify-center text-center group hover:bg-emerald-50/20 hover:border-emerald-200 transition-all cursor-pointer min-h-[460px] bg-white/50">
-                    <div className="w-24 h-24 bg-white rounded-full shadow-2xl flex items-center justify-center mb-10 border border-gray-50 group-hover:scale-110 transition-transform"><Plus size={40} className="text-emerald-500"/></div>
-                    <h3 className="text-2xl font-black text-gray-400 group-hover:text-gray-900 uppercase tracking-tighter">Provision Buyer</h3>
-                    <p className="text-[10px] text-gray-300 font-black uppercase tracking-[0.2em] mt-4">Invite Direct Account</p>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* SUPPLIERS VIEW */}
-      {activeTab === 'Suppliers' && (
-        <div className="space-y-10 animate-in fade-in duration-300">
-            <div className="bg-white p-3 rounded-3xl border border-gray-200 shadow-sm flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
-                {AU_STATES.map(state => <button key={state} onClick={() => setSelectedState(state)} className={`flex-1 min-w-[100px] py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${selectedState === state ? 'bg-emerald-600 text-white shadow-xl ring-4 ring-emerald-50' : 'text-gray-400 hover:bg-gray-50'}`}>{state}</button>)}
-            </div>
-            <div className="bg-white rounded-[3.5rem] shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-12 bg-gray-50/50 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-8">
-                    <div className="flex items-center gap-5">
-                        <div className="p-4 bg-white rounded-[1.5rem] shadow-xl text-emerald-600 border border-gray-100"><Store size={32}/></div>
-                        <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter">{selectedState} Market Directory</h2>
-                    </div>
-                    <button className="px-8 py-3.5 bg-white border-2 border-indigo-100 text-indigo-600 font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-sm hover:bg-indigo-50 transition-all flex items-center gap-3">
-                        <Globe size={18}/> Global Sourcing
-                    </button>
-                </div>
-                <div className="overflow-x-auto">
-                    {filteredSaSuppliers.length > 0 ? (
-                        <table className="w-full text-left">
-                            <thead className="bg-white border-b border-gray-100 text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">
-                                <tr><th className="px-12 py-8">Trading Entity</th><th className="px-12 py-8">Mobile</th><th className="px-12 py-8">Location</th><th className="px-12 py-8 text-right">Actions</th></tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {filteredSaSuppliers.map((s, i) => (
-                                    <tr key={i} className="hover:bg-gray-50/80 transition-all group">
-                                        <td className="px-12 py-10 font-black text-gray-900 uppercase tracking-tighter text-xl">{s.name}</td>
-                                        <td className="px-12 py-10 text-base font-bold text-gray-500">{s.mobile}</td>
-                                        <td className="px-12 py-10 text-[11px] font-black text-gray-400 uppercase tracking-widest">{s.location}</td>
-                                        <td className="px-12 py-10 text-right"><button onClick={() => setSelectedSupplierForPhoto(s)} className="p-5 bg-white border border-gray-200 text-gray-400 hover:text-indigo-600 hover:border-indigo-200 rounded-[1.5rem] transition-all shadow-md group-hover:scale-110 active:scale-95"><Camera size={24}/></button></td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    ) : <div className="p-40 text-center text-gray-200 font-black uppercase tracking-[0.5em]">Network Search Found 0 Partners</div>}
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* SETTINGS VIEW */}
-      {activeTab === 'Settings' && (
+      {activeTab === 'SETTINGS' && (
         <div className="animate-in fade-in duration-300">
           <SettingsComponent user={user} onRefreshUser={loadData} />
         </div>
       )}
 
-      {/* MODALS */}
-      <SendPhotoOfferModal isOpen={!!selectedSupplierForPhoto} onClose={() => setSelectedSupplierForPhoto(null)} supplier={selectedSupplierForPhoto} products={products} />
-      <InviteBuyerModal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} wholesaler={user} />
-      <InterestsModal user={user} isOpen={isInterestsModalOpen} onClose={() => setIsInterestsModalOpen(false)} onSaved={loadData} />
+      <OrderFulfillmentModal 
+        isOpen={!!selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        order={selectedOrder}
+        products={products}
+        customers={customers}
+        onUpdate={loadData}
+      />
     </div>
   );
 };

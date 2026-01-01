@@ -126,6 +126,7 @@ export interface InventoryItem {
   batchImageUrl?: string;
   lastPriceVerifiedDate?: string;
   notes?: string;
+  logisticsPrice?: number;
 }
 
 export interface OrderItem {
@@ -181,6 +182,7 @@ export interface Order {
   issue?: OrderIssue;
   itemIssues?: OrderIssue[];
   isFullyVerified?: boolean;
+  source?: 'Marketplace' | 'Direct';
 }
 
 export interface Customer {

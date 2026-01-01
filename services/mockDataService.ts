@@ -33,8 +33,8 @@ export interface DeliAppItem {
 
 export const USERS: User[] = [
   { id: 'u1', name: 'Admin User', businessName: 'Platform Zero', role: UserRole.ADMIN, email: 'admin@pz.com' },
-  { id: 'u2', name: 'Sarah Wholesaler', businessName: 'Fresh Wholesalers', role: UserRole.WHOLESALER, email: 'sarah@fresh.com', dashboardVersion: 'v2', activeSellingInterests: [], activeBuyingInterests: [], businessProfile: { isComplete: true } as any },
-  { id: 'u3', name: 'Bob Farmer', businessName: 'Green Valley Farms', role: UserRole.FARMER, email: 'bob@greenvalley.com', dashboardVersion: 'v2', activeSellingInterests: [], activeBuyingInterests: [], businessProfile: { isComplete: true } as any },
+  { id: 'u2', name: 'Sarah Wholesaler', businessName: 'Fresh Wholesalers', role: UserRole.WHOLESALER, email: 'sarah@fresh.com', dashboardVersion: 'v2', activeSellingInterests: ['Tomatoes', 'Lettuce', 'Eggplants'], activeBuyingInterests: ['Potatoes', 'Apples'], businessProfile: { isComplete: true } as any },
+  { id: 'u3', name: 'Bob Farmer', businessName: 'Green Valley Farms', role: UserRole.FARMER, email: 'bob@greenvalley.com', dashboardVersion: 'v2', activeSellingInterests: ['Potatoes', 'Apples'], activeBuyingInterests: [], businessProfile: { isComplete: true } as any },
   { id: 'u4', name: 'Alice Consumer', businessName: 'The Morning Cafe', role: UserRole.CONSUMER, email: 'alice@cafe.com', phone: '0412 345 678', industry: 'Cafe', smsNotificationsEnabled: true },
   { id: 'u5', name: 'Gary Grocer', businessName: 'Local Corner Grocers', role: UserRole.GROCERY, email: 'gary@grocer.com', phone: '0411 222 333', industry: 'Grocery Store', smsNotificationsEnabled: true },
   { id: 'rep1', name: 'Alex Johnson', businessName: 'Platform Zero', role: UserRole.PZ_REP, email: 'rep1@pz.com', commissionRate: 5.0 },
@@ -73,9 +73,10 @@ class MockDataService {
   ];
 
   private inventory: InventoryItem[] = [
-    { id: 'i1', lotNumber: 'PZ-LOT-1001', productId: 'p1', ownerId: 'u3', quantityKg: 500, expiryDate: new Date(Date.now() + 86400000 * 5).toISOString(), harvestDate: new Date().toISOString(), uploadedAt: new Date(Date.now() - 86400000 * 10).toISOString(), status: 'Available', originalFarmerName: 'Green Valley Farms', harvestLocation: 'Yarra Valley', warehouseLocation: 'Zone A-4', discountAfterDays: 3, discountPricePerKg: 3.00 },
-    { id: 'i2', lotNumber: 'PZ-LOT-1002', productId: 'p2', ownerId: 'u2', quantityKg: 1000, expiryDate: new Date(Date.now() + 86400000 * 14).toISOString(), harvestDate: new Date().toISOString(), uploadedAt: new Date(Date.now() - 86400000).toISOString(), status: 'Available', originalFarmerName: 'Bob\'s Spuds', harvestLocation: 'Gippsland', warehouseLocation: 'Cold Room 1' },
-    { id: 'i3', lotNumber: 'PZ-LOT-1003', productId: 'p4', ownerId: 'u2', quantityKg: 200, expiryDate: new Date(Date.now() + 86400000 * 3).toISOString(), harvestDate: new Date().toISOString(), uploadedAt: new Date().toISOString(), status: 'Available', originalFarmerName: 'Green Valley Farms', harvestLocation: 'Yarra Valley', warehouseLocation: 'Zone C-2' },
+    { id: 'i1', lotNumber: 'PZ-LOT-1001', productId: 'p1', ownerId: 'u3', quantityKg: 500, expiryDate: new Date(Date.now() + 86400000 * 5).toISOString(), harvestDate: new Date().toISOString(), uploadedAt: new Date(Date.now() - 86400000 * 10).toISOString(), status: 'Available', originalFarmerName: 'Green Valley Farms', harvestLocation: 'Yarra Valley', warehouseLocation: 'Zone A-4', discountAfterDays: 3, discountPricePerKg: 3.00, logisticsPrice: 15.00 },
+    { id: 'i2', lotNumber: 'PZ-LOT-1002', productId: 'p2', ownerId: 'u2', quantityKg: 1000, expiryDate: new Date(Date.now() + 86400000 * 14).toISOString(), harvestDate: new Date().toISOString(), uploadedAt: new Date(Date.now() - 86400000).toISOString(), status: 'Available', originalFarmerName: 'Bob\'s Spuds', harvestLocation: 'Gippsland', warehouseLocation: 'Cold Room 1', logisticsPrice: 20.00 },
+    { id: 'i3', lotNumber: 'PZ-LOT-1003', productId: 'p4', ownerId: 'u2', quantityKg: 200, expiryDate: new Date(Date.now() + 86400000 * 3).toISOString(), harvestDate: new Date().toISOString(), uploadedAt: new Date().toISOString(), status: 'Available', originalFarmerName: 'Green Valley Farms', harvestLocation: 'Yarra Valley', warehouseLocation: 'Zone C-2', logisticsPrice: 12.50 },
+    { id: 'i4', lotNumber: 'PZ-LOT-1004', productId: 'p5', ownerId: 'u3', quantityKg: 800, expiryDate: new Date(Date.now() + 86400000 * 10).toISOString(), harvestDate: new Date().toISOString(), uploadedAt: new Date().toISOString(), status: 'Available', originalFarmerName: 'Bob\'s Spuds', harvestLocation: 'Gippsland', warehouseLocation: 'Zone D-1', logisticsPrice: 18.00 },
   ];
 
   private orders: Order[] = [];
@@ -104,20 +105,20 @@ class MockDataService {
       const now = new Date();
       // Outgoing Today
       this.orders.push({
-          id: `o-today-1`, buyerId: 'u4', sellerId: 'u2', items: [{ productId: 'p1', quantityKg: 50, pricePerKg: 4.50 }], totalAmount: 225.00, status: 'Confirmed', date: now.toISOString(), paymentStatus: 'Unpaid'
+          id: `o-today-1`, buyerId: 'u4', sellerId: 'u2', items: [{ productId: 'p1', quantityKg: 50, pricePerKg: 4.50 }], totalAmount: 225.00, status: 'Confirmed', date: now.toISOString(), paymentStatus: 'Unpaid', source: 'Direct'
       });
       this.orders.push({
-          id: `o-today-2`, buyerId: 'u5', sellerId: 'u3', items: [{ productId: 'p5', quantityKg: 100, pricePerKg: 2.10 }], totalAmount: 210.00, status: 'Shipped', date: now.toISOString(), paymentStatus: 'Unpaid', logistics: { driverName: 'Dave Driver', deliveryTime: '2:30 PM' }
+          id: `o-today-2`, buyerId: 'u5', sellerId: 'u3', items: [{ productId: 'p5', quantityKg: 100, pricePerKg: 2.10 }], totalAmount: 210.00, status: 'Shipped', date: now.toISOString(), paymentStatus: 'Unpaid', logistics: { driverName: 'Dave Driver', deliveryTime: '2:30 PM' }, source: 'Marketplace'
       });
       // Delivered recently (within countdown window)
       const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
       this.orders.push({
-          id: `o-delivered-1`, buyerId: 'c1', sellerId: 'u2', items: [{ productId: 'p4', quantityKg: 20, pricePerKg: 5.50 }], totalAmount: 110.00, status: 'Delivered', date: oneHourAgo, deliveredAt: oneHourAgo, paymentStatus: 'Unpaid'
+          id: `o-delivered-1`, buyerId: 'c1', sellerId: 'u2', items: [{ productId: 'p4', quantityKg: 20, pricePerKg: 5.50 }], totalAmount: 110.00, status: 'Delivered', date: oneHourAgo, deliveredAt: oneHourAgo, paymentStatus: 'Unpaid', source: 'Direct'
       });
       // Delivered earlier (still in 90m window)
       const eightyMinsAgo = new Date(Date.now() - 80 * 60 * 1000).toISOString();
       this.orders.push({
-          id: `o-delivered-2`, buyerId: 'c2', sellerId: 'u3', items: [{ productId: 'p1', quantityKg: 40, pricePerKg: 4.50 }], totalAmount: 180.00, status: 'Delivered', date: eightyMinsAgo, deliveredAt: eightyMinsAgo, paymentStatus: 'Unpaid'
+          id: `o-delivered-2`, buyerId: 'c2', sellerId: 'u3', items: [{ productId: 'p1', quantityKg: 40, pricePerKg: 4.50 }], totalAmount: 180.00, status: 'Delivered', date: eightyMinsAgo, deliveredAt: eightyMinsAgo, paymentStatus: 'Unpaid', source: 'Marketplace'
       });
   }
 
@@ -183,14 +184,14 @@ class MockDataService {
   createFullOrder(buyerId: string, items: OrderItem[], total: number) {
       const buyerProfile = this.customers.find(c => c.id === buyerId);
       const sellerId = buyerProfile?.connectedSupplierId || 'u2'; 
-      const newOrder: Order = { id: `o-${Date.now()}`, buyerId, sellerId, items, totalAmount: total, status: 'Pending', date: new Date().toISOString(), paymentStatus: 'Unpaid' };
+      const newOrder: Order = { id: `o-${Date.now()}`, buyerId, sellerId, items, totalAmount: total, status: 'Pending', date: new Date().toISOString(), paymentStatus: 'Unpaid', source: 'Direct' };
       this.orders.push(newOrder);
       this.addAppNotification(sellerId, 'New Order Received', `Order for $${total.toFixed(2)} received.`, 'ORDER');
       return newOrder;
   }
 
   createInstantOrder(buyerId: string, item: InventoryItem, quantity: number, price: number) {
-    const newOrder: Order = { id: `o-inst-${Date.now()}`, buyerId, sellerId: item.ownerId, items: [{ productId: item.productId, quantityKg: quantity, pricePerKg: price }], totalAmount: quantity * price, status: 'Confirmed', date: new Date().toISOString(), paymentStatus: 'Unpaid' };
+    const newOrder: Order = { id: `o-inst-${Date.now()}`, buyerId, sellerId: item.ownerId, items: [{ productId: item.productId, quantityKg: quantity, pricePerKg: price }], totalAmount: quantity * price, status: 'Confirmed', date: new Date().toISOString(), paymentStatus: 'Unpaid', source: 'Marketplace' };
     this.orders.push(newOrder);
     return newOrder;
   }
@@ -270,11 +271,16 @@ class MockDataService {
   getPackers(wholesalerId: string) { return this.packers.filter(p => p.wholesalerId === wholesalerId); }
   addPacker(packer: Packer) { this.packers.push(packer); }
   getPackerOrders(packerId: string) { return this.orders.filter(o => o.status === 'Confirmed'); }
+  
   packOrder(orderId: string, packerName: string) {
     const order = this.orders.find(o => o.id === orderId);
     if (order) {
         order.status = 'Ready for Delivery';
         order.packedAt = new Date().toISOString();
+        const buyer = this.users.find(u => u.id === order.buyerId);
+        if (buyer?.smsNotificationsEnabled && buyer.phone) {
+            triggerNativeSms(buyer.phone, `PZ UPDATE: Order #${order.id.split('-').pop()} has been packed and is ready for dispatch.`);
+        }
     }
   }
 
@@ -303,7 +309,7 @@ class MockDataService {
     this.customers.push({ id: `c-${Date.now()}`, businessName: data.businessName, contactName: data.name, email: data.email, phone: data.mobile, category: 'Restaurant', industry: data.industry, connectionStatus: 'Pending Connection', connectedSupplierId: USERS[1].id });
     return req;
   }
-  deleteRegistrationRequest(id: string) { this.registrationRequests = this.registrationRequests.filter(r => r.id !== id); }
+  deleteRegistrationRequest(id: string) { this.registrationRequests = this.registrationRequests.filter(r => r.id !== r.id); }
   onboardNewBusiness(data: any): User {
     const newUser: User = { id: `u-${Date.now()}`, name: data.name || 'New Lead', businessName: data.businessName, email: data.email, role: data.role || (data.type === 'Supplier' ? UserRole.WHOLESALER : UserRole.CONSUMER), industry: data.industry, phone: data.phone, businessProfile: { isComplete: false, abn: data.abn, businessLocation: data.address } as any };
     this.users.push(newUser);
